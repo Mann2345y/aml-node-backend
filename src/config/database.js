@@ -57,13 +57,29 @@ function buildConnectionConfig() {
   return config;
 }
 
-const pool = new Pool(buildConnectionConfig());
+const connectionConfig = buildConnectionConfig();
+const pool = new Pool(connectionConfig);
 
 // Track active connections for monitoring
 let activeConnections = 0;
+let isFirstConnection = true;
 
-pool.on('connect', () => {
+pool.on('connect', (client) => {
   activeConnections++;
+  
+  // Log the first connection to show database is connected
+  if (isFirstConnection) {
+    isFirstConnection = false;
+    console.log(JSON.stringify({
+      severity: 'INFO',
+      message: 'Database connected successfully',
+      host: connectionConfig.host,
+      database: connectionConfig.database,
+      user: connectionConfig.user,
+      poolSize: { min: connectionConfig.min, max: connectionConfig.max },
+      timestamp: new Date().toISOString(),
+    }));
+  }
 });
 
 pool.on('remove', () => {
@@ -215,6 +231,38 @@ export async function healthCheck() {
       latency: Date.now() - start,
       error: error.message,
     };
+  }
+}
+
+/**
+ * Test database connection and log the result
+ * @returns {Promise<void>}
+ */
+export async function testConnection() {
+  try {
+    const start = Date.now();
+    await pool.query('SELECT 1');
+    const latency = Date.now() - start;
+    
+    console.log(JSON.stringify({
+      severity: 'INFO',
+      message: 'Database connection test successful',
+      host: connectionConfig.host,
+      database: connectionConfig.database,
+      user: connectionConfig.user,
+      latency: `${latency}ms`,
+      poolStats: getPoolStats(),
+      timestamp: new Date().toISOString(),
+    }));
+  } catch (error) {
+    console.error(JSON.stringify({
+      severity: 'ERROR',
+      message: 'Database connection test failed',
+      error: error.message,
+      code: error.code,
+      timestamp: new Date().toISOString(),
+    }));
+    throw error;
   }
 }
 
