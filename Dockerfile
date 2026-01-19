@@ -15,7 +15,9 @@ RUN npm ci --only=production
 # Install Playwright Chromium
 # Note: We install system dependencies separately in the production stage using apk
 # --with-deps doesn't work on Alpine (it tries to use apt-get)
-RUN npx playwright install chromium
+RUN npx playwright install chromium && \
+    ls -la /root/.cache/ms-playwright/ && \
+    find /root/.cache/ms-playwright -name "chrome*" -type f 2>/dev/null | head -10 || true
 
 # ───────────────────────────────────────────────────────────────────
 # Production image
@@ -44,7 +46,13 @@ WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copy Playwright browsers (installed as root in builder, accessible to all)
+# Create the directory first to ensure it exists
+RUN mkdir -p /home/nodejs/.cache/ms-playwright
 COPY --from=builder --chown=nodejs:nodejs /root/.cache/ms-playwright /home/nodejs/.cache/ms-playwright
+
+# Verify browsers were copied correctly (run as root before switching to nodejs user)
+RUN ls -la /home/nodejs/.cache/ms-playwright/ && \
+    find /home/nodejs/.cache/ms-playwright -name "chrome*" -type f 2>/dev/null | head -10 || true
 
 # Set Playwright browsers path
 ENV PLAYWRIGHT_BROWSERS_PATH=/home/nodejs/.cache/ms-playwright

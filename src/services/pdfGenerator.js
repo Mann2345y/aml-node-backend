@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -355,26 +355,96 @@ export async function generateReceiptPDF(receiptData) {
     let executablePath = undefined;
     const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || '';
     
-    // Paths to check
-    const chromiumPath = join(browsersPath, 'chromium-1200', 'chrome-linux', 'chrome');
-    const headlessShellPath = join(browsersPath, 'chromium_headless_shell-1200', 'chrome-headless-shell-linux64', 'chrome-headless-shell');
+    // Function to find chromium executable dynamically (handles version changes)
+    const findChromiumExecutable = (basePath) => {
+      if (!basePath || !existsSync(basePath)) return null;
+      
+      try {
+        // Look for chromium-* directories
+        const entries = readdirSync(basePath);
+        const chromiumDirs = entries.filter(e => e.startsWith('chromium-') && !e.includes('headless'));
+        
+        for (const dir of chromiumDirs) {
+          const chromiumDir = join(basePath, dir);
+          // Try common paths
+          const possiblePaths = [
+            join(chromiumDir, 'chrome-linux', 'chrome'),
+            join(chromiumDir, 'chrome', 'chrome'),
+            join(chromiumDir, 'chrome'),
+          ];
+          
+          for (const path of possiblePaths) {
+            if (existsSync(path)) {
+              const stat = statSync(path);
+              if (stat.isFile()) {
+                return path;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(
+          JSON.stringify({
+            severity: 'WARNING',
+            message: 'Error searching for chromium executable',
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+      return null;
+    };
     
-    // Log what we're checking
+    // Function to find headless shell executable
+    const findHeadlessShellExecutable = (basePath) => {
+      if (!basePath || !existsSync(basePath)) return null;
+      
+      try {
+        const entries = readdirSync(basePath);
+        const headlessDirs = entries.filter(e => e.startsWith('chromium_headless_shell-'));
+        
+        for (const dir of headlessDirs) {
+          const headlessDir = join(basePath, dir);
+          const possiblePaths = [
+            join(headlessDir, 'chrome-headless-shell-linux64', 'chrome-headless-shell'),
+            join(headlessDir, 'chrome-headless-shell'),
+          ];
+          
+          for (const path of possiblePaths) {
+            if (existsSync(path)) {
+              const stat = statSync(path);
+              if (stat.isFile()) {
+                return path;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore errors
+      }
+      return null;
+    };
+    
+    // Try to find regular chromium first
+    const chromiumPath = findChromiumExecutable(browsersPath);
+    const headlessShellPath = findHeadlessShellExecutable(browsersPath);
+    
+    // Log what we found
     console.log(
       JSON.stringify({
         severity: 'INFO',
         message: 'Checking for browser executables',
         browsersPath,
-        chromiumPath,
-        chromiumExists: browsersPath ? existsSync(chromiumPath) : false,
-        headlessShellPath,
-        headlessShellExists: browsersPath ? existsSync(headlessShellPath) : false,
+        chromiumFound: !!chromiumPath,
+        chromiumPath: chromiumPath || 'not found',
+        headlessShellFound: !!headlessShellPath,
+        headlessShellPath: headlessShellPath || 'not found',
         timestamp: new Date().toISOString(),
       })
     );
     
     // Always prefer regular chromium - it's more reliable
-    if (browsersPath && existsSync(chromiumPath)) {
+    if (chromiumPath) {
       executablePath = chromiumPath;
       console.log(
         JSON.stringify({
@@ -384,7 +454,7 @@ export async function generateReceiptPDF(receiptData) {
           timestamp: new Date().toISOString(),
         })
       );
-    } else if (browsersPath && existsSync(headlessShellPath)) {
+    } else if (headlessShellPath) {
       // Fallback to headless shell only if regular chromium not found
       executablePath = headlessShellPath;
       console.log(
@@ -402,11 +472,10 @@ export async function generateReceiptPDF(receiptData) {
           severity: 'ERROR',
           message: 'No browser executable found',
           browsersPath,
-          checkedPaths: { chromiumPath, headlessShellPath },
           timestamp: new Date().toISOString(),
         })
       );
-      throw new Error(`No browser executable found. Checked: ${chromiumPath}, ${headlessShellPath}`);
+      throw new Error(`No browser executable found in ${browsersPath || 'default location'}`);
     }
 
     // Launch a new browser instance for each request (more reliable)
