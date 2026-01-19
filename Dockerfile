@@ -12,9 +12,10 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
-# Install Playwright Chromium with dependencies
-# This installs both chromium and chromium_headless_shell
-RUN npx playwright install chromium --with-deps
+# Install Playwright Chromium
+# Note: We install system dependencies separately in the production stage using apk
+# --with-deps doesn't work on Alpine (it tries to use apt-get)
+RUN npx playwright install chromium
 
 # ───────────────────────────────────────────────────────────────────
 # Production image
