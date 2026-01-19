@@ -12,8 +12,9 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
-# Install Playwright Chromium
-RUN npx playwright install chromium
+# Install Playwright Chromium with dependencies
+# This installs both chromium and chromium_headless_shell
+RUN npx playwright install chromium --with-deps
 
 # ───────────────────────────────────────────────────────────────────
 # Production image

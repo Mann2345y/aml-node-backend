@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -349,8 +350,50 @@ export async function generateReceiptPDF(receiptData) {
   let browser = null;
   
   try {
+    // Determine which browser executable to use
+    // Playwright prefers headless shell, but we'll use regular chromium if headless shell is not available
+    let executablePath = undefined;
+    const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || '';
+    
+    // Check if headless shell exists
+    const headlessShellPath = join(browsersPath, 'chromium_headless_shell-1200', 'chrome-headless-shell-linux64', 'chrome-headless-shell');
+    const chromiumPath = join(browsersPath, 'chromium-1200', 'chrome-linux', 'chrome');
+    
+    if (browsersPath && existsSync(chromiumPath)) {
+      // Use regular chromium if available
+      executablePath = chromiumPath;
+      console.log(
+        JSON.stringify({
+          severity: 'INFO',
+          message: 'Using regular Chromium browser',
+          path: executablePath,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    } else if (browsersPath && existsSync(headlessShellPath)) {
+      // Use headless shell if regular chromium not found
+      executablePath = headlessShellPath;
+      console.log(
+        JSON.stringify({
+          severity: 'INFO',
+          message: 'Using Chromium headless shell',
+          path: executablePath,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    } else {
+      console.log(
+        JSON.stringify({
+          severity: 'INFO',
+          message: 'Using default Playwright browser detection',
+          browsersPath: browsersPath || 'not set',
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+
     // Launch a new browser instance for each request (more reliable)
-    browser = await chromium.launch({
+    const launchOptions = {
       headless: true,
       args: [
         '--no-sandbox',
@@ -374,7 +417,14 @@ export async function generateReceiptPDF(receiptData) {
         '--single-process', // Use single process mode for better stability
       ],
       timeout: 30000,
-    });
+    };
+
+    // Set executable path if we found one
+    if (executablePath) {
+      launchOptions.executablePath = executablePath;
+    }
+
+    browser = await chromium.launch(launchOptions);
 
     page = await browser.newPage({
       timeout: 30000,
