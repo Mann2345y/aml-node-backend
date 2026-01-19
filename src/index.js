@@ -12,13 +12,10 @@ import {
 } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { closePool, testConnection } from "./config/database.js";
-import { initRedis, closeRedis } from "./config/redis.js";
 
 import healthRoutes from "./routes/health.js";
 import queryRoutes from "./routes/query.js";
-
-// Initialize Redis for rate limiting (optional, falls back to memory)
-initRedis();
+import receiptRoutes from "./routes/receipt.js";
 
 // Test database connection on startup
 testConnection().catch((error) => {
@@ -126,13 +123,14 @@ app.use("/health", healthRoutes);
 
 // Apply security middleware to API routes
 app.use("/api", ipAccessControl);
-app.use("/api", checkIPBlock); // Check Redis-based IP blocks
+app.use("/api", checkIPBlock); // Check IP blocks
 app.use("/api", requestSizeLimit);
 app.use("/api", rateLimit);
 app.use("/api", apiKeyAuth);
 
 // API routes
 app.use("/api/query", queryRoutes);
+app.use("/api", receiptRoutes);
 
 // Root endpoint (public info)
 app.get("/", (req, res) => {
@@ -169,16 +167,6 @@ const shutdown = async (signal) => {
       JSON.stringify({
         severity: "INFO",
         message: "HTTP server closed",
-        timestamp: new Date().toISOString(),
-      })
-    );
-
-    // Close Redis connection
-    await closeRedis();
-    console.log(
-      JSON.stringify({
-        severity: "INFO",
-        message: "Redis connection closed",
         timestamp: new Date().toISOString(),
       })
     );

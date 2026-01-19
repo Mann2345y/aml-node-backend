@@ -188,11 +188,38 @@ function constantTimeEqual(a, b) {
 }
 
 /**
+ * Parse size string (e.g., "1mb", "500kb") to bytes
+ */
+function parseSize(sizeStr) {
+  if (!sizeStr) return 1048576; // 1MB default
+  
+  const str = String(sizeStr).toLowerCase().trim();
+  const match = str.match(/^(\d+)(kb|mb|gb)?$/);
+  
+  if (!match) {
+    // Fallback to parseInt if no unit
+    return parseInt(str, 10) || 1048576;
+  }
+  
+  const value = parseInt(match[1], 10);
+  const unit = match[2] || 'b';
+  
+  const multipliers = {
+    'b': 1,
+    'kb': 1024,
+    'mb': 1024 * 1024,
+    'gb': 1024 * 1024 * 1024,
+  };
+  
+  return value * (multipliers[unit] || 1);
+}
+
+/**
  * Request size validation middleware
  */
 export function requestSizeLimit(req, res, next) {
   const contentLength = parseInt(req.headers['content-length'], 10);
-  const maxSize = parseInt(process.env.MAX_REQUEST_SIZE, 10) || 1048576; // 1MB default
+  const maxSize = parseSize(process.env.MAX_REQUEST_SIZE);
 
   if (contentLength > maxSize) {
     return res.status(413).json({

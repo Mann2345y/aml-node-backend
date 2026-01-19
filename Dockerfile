@@ -12,10 +12,25 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
+# Install Playwright Chromium
+RUN npx playwright install chromium
+
 # ───────────────────────────────────────────────────────────────────
 # Production image
 # ───────────────────────────────────────────────────────────────────
 FROM node:20-alpine
+
+# Install system dependencies for Playwright Chromium
+RUN apk add --no-cache \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-emoji \
+    wqy-zhenhei \
+    && rm -rf /var/cache/apk/*
 
 # Security: Run as non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -25,6 +40,12 @@ WORKDIR /app
 
 # Copy dependencies from builder
 COPY --from=builder /app/node_modules ./node_modules
+
+# Copy Playwright browsers (installed as root in builder, accessible to all)
+COPY --from=builder --chown=nodejs:nodejs /root/.cache/ms-playwright /home/nodejs/.cache/ms-playwright
+
+# Set Playwright browsers path
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/nodejs/.cache/ms-playwright
 
 # Copy application code
 COPY --chown=nodejs:nodejs . .
