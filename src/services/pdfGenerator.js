@@ -2,7 +2,6 @@ import { chromium } from 'playwright';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, readdirSync, statSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -350,139 +349,20 @@ export async function generateReceiptPDF(receiptData) {
   let browser = null;
   
   try {
-    // Determine which browser executable to use
-    // Always prefer regular chromium over headless shell
-    let executablePath = undefined;
-    const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || '';
-    
-    // Function to find chromium executable dynamically (handles version changes)
-    const findChromiumExecutable = (basePath) => {
-      if (!basePath || !existsSync(basePath)) return null;
-      
-      try {
-        // Look for chromium-* directories
-        const entries = readdirSync(basePath);
-        const chromiumDirs = entries.filter(e => e.startsWith('chromium-') && !e.includes('headless'));
-        
-        for (const dir of chromiumDirs) {
-          const chromiumDir = join(basePath, dir);
-          // Try common paths
-          const possiblePaths = [
-            join(chromiumDir, 'chrome-linux', 'chrome'),
-            join(chromiumDir, 'chrome', 'chrome'),
-            join(chromiumDir, 'chrome'),
-          ];
-          
-          for (const path of possiblePaths) {
-            if (existsSync(path)) {
-              const stat = statSync(path);
-              if (stat.isFile()) {
-                return path;
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.warn(
-          JSON.stringify({
-            severity: 'WARNING',
-            message: 'Error searching for chromium executable',
-            error: error.message,
-            timestamp: new Date().toISOString(),
-          })
-        );
-      }
-      return null;
-    };
-    
-    // Function to find headless shell executable
-    const findHeadlessShellExecutable = (basePath) => {
-      if (!basePath || !existsSync(basePath)) return null;
-      
-      try {
-        const entries = readdirSync(basePath);
-        const headlessDirs = entries.filter(e => e.startsWith('chromium_headless_shell-'));
-        
-        for (const dir of headlessDirs) {
-          const headlessDir = join(basePath, dir);
-          const possiblePaths = [
-            join(headlessDir, 'chrome-headless-shell-linux64', 'chrome-headless-shell'),
-            join(headlessDir, 'chrome-headless-shell'),
-          ];
-          
-          for (const path of possiblePaths) {
-            if (existsSync(path)) {
-              const stat = statSync(path);
-              if (stat.isFile()) {
-                return path;
-              }
-            }
-          }
-        }
-      } catch (error) {
-        // Ignore errors
-      }
-      return null;
-    };
-    
-    // Try to find regular chromium first
-    const chromiumPath = findChromiumExecutable(browsersPath);
-    const headlessShellPath = findHeadlessShellExecutable(browsersPath);
-    
-    // Log what we found
+    // With Playwright's official Docker image, browsers are pre-installed
+    // Playwright will automatically find them - no need to set executablePath
     console.log(
       JSON.stringify({
         severity: 'INFO',
-        message: 'Checking for browser executables',
-        browsersPath,
-        chromiumFound: !!chromiumPath,
-        chromiumPath: chromiumPath || 'not found',
-        headlessShellFound: !!headlessShellPath,
-        headlessShellPath: headlessShellPath || 'not found',
+        message: 'Launching Chromium browser (using Playwright official image)',
         timestamp: new Date().toISOString(),
       })
     );
-    
-    // Always prefer regular chromium - it's more reliable
-    if (chromiumPath) {
-      executablePath = chromiumPath;
-      console.log(
-        JSON.stringify({
-          severity: 'INFO',
-          message: 'Using regular Chromium browser',
-          path: executablePath,
-          timestamp: new Date().toISOString(),
-        })
-      );
-    } else if (headlessShellPath) {
-      // Fallback to headless shell only if regular chromium not found
-      executablePath = headlessShellPath;
-      console.log(
-        JSON.stringify({
-          severity: 'WARNING',
-          message: 'Regular Chromium not found, using headless shell',
-          path: executablePath,
-          timestamp: new Date().toISOString(),
-        })
-      );
-    } else {
-      // Neither browser found - this will likely fail
-      console.error(
-        JSON.stringify({
-          severity: 'ERROR',
-          message: 'No browser executable found',
-          browsersPath,
-          timestamp: new Date().toISOString(),
-        })
-      );
-      throw new Error(`No browser executable found in ${browsersPath || 'default location'}`);
-    }
 
     // Launch a new browser instance for each request (more reliable)
-    // ALWAYS set executablePath to force use of regular chromium (not headless shell)
+    // Playwright will use the pre-installed browser from the official image
     const launchOptions = {
       headless: true,
-      executablePath: executablePath, // Always set this to avoid Playwright defaulting to headless shell
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',

@@ -1,8 +1,11 @@
 # ═══════════════════════════════════════════════════════════════════
 # Production Dockerfile for GCP Cloud Run
+# Uses Playwright's official Docker image with browsers pre-installed
 # ═══════════════════════════════════════════════════════════════════
 
-FROM node:20-alpine AS builder
+# Use Playwright's official image - includes Node.js, browsers, and all dependencies
+# Using latest stable version that matches playwright ^1.57.0
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
 
 WORKDIR /app
 
@@ -12,59 +15,18 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production
 
-# Install Playwright Chromium
-# Note: We install system dependencies separately in the production stage using apk
-# --with-deps doesn't work on Alpine (it tries to use apt-get)
-RUN npx playwright install chromium && \
-    ls -la /root/.cache/ms-playwright/ && \
-    find /root/.cache/ms-playwright -name "chrome*" -type f 2>/dev/null | head -10 || true
-
-# ───────────────────────────────────────────────────────────────────
-# Production image
-# ───────────────────────────────────────────────────────────────────
-FROM node:20-alpine
-
-# Install system dependencies for Playwright Chromium
-RUN apk add --no-cache \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    font-noto-emoji \
-    font-noto-cjk \
-    && rm -rf /var/cache/apk/*
-
-# Security: Run as non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-WORKDIR /app
-
-# Copy dependencies from builder
-COPY --from=builder /app/node_modules ./node_modules
-
-# Copy Playwright browsers (installed as root in builder, accessible to all)
-# Create the directory first to ensure it exists
-RUN mkdir -p /home/nodejs/.cache/ms-playwright
-COPY --from=builder --chown=nodejs:nodejs /root/.cache/ms-playwright /home/nodejs/.cache/ms-playwright
-
-# Verify browsers were copied correctly (run as root before switching to nodejs user)
-RUN ls -la /home/nodejs/.cache/ms-playwright/ && \
-    find /home/nodejs/.cache/ms-playwright -name "chrome*" -type f 2>/dev/null | head -10 || true
-
-# Set Playwright browsers path
-ENV PLAYWRIGHT_BROWSERS_PATH=/home/nodejs/.cache/ms-playwright
+# Note: Browsers are already pre-installed in the Playwright image
+# No need to install or copy browsers - they're already available
 
 # Copy application code
-COPY --chown=nodejs:nodejs . .
+COPY . .
 
 # Remove unnecessary files
 RUN rm -rf Dockerfile .dockerignore .git .gitignore env.example README.md
 
-# Switch to non-root user
-USER nodejs
+# Note: Playwright image runs as root by default
+# For Cloud Run, this is acceptable, but you can switch to a non-root user if needed
+# The Playwright image already has proper permissions set up
 
 # Expose port (Cloud Run uses PORT env var)
 EXPOSE 3001
