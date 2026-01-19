@@ -351,16 +351,30 @@ export async function generateReceiptPDF(receiptData) {
   
   try {
     // Determine which browser executable to use
-    // Playwright prefers headless shell, but we'll use regular chromium if headless shell is not available
+    // Always prefer regular chromium over headless shell
     let executablePath = undefined;
     const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH || '';
     
-    // Check if headless shell exists
-    const headlessShellPath = join(browsersPath, 'chromium_headless_shell-1200', 'chrome-headless-shell-linux64', 'chrome-headless-shell');
+    // Paths to check
     const chromiumPath = join(browsersPath, 'chromium-1200', 'chrome-linux', 'chrome');
+    const headlessShellPath = join(browsersPath, 'chromium_headless_shell-1200', 'chrome-headless-shell-linux64', 'chrome-headless-shell');
     
+    // Log what we're checking
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'Checking for browser executables',
+        browsersPath,
+        chromiumPath,
+        chromiumExists: browsersPath ? existsSync(chromiumPath) : false,
+        headlessShellPath,
+        headlessShellExists: browsersPath ? existsSync(headlessShellPath) : false,
+        timestamp: new Date().toISOString(),
+      })
+    );
+    
+    // Always prefer regular chromium - it's more reliable
     if (browsersPath && existsSync(chromiumPath)) {
-      // Use regular chromium if available
       executablePath = chromiumPath;
       console.log(
         JSON.stringify({
@@ -371,30 +385,35 @@ export async function generateReceiptPDF(receiptData) {
         })
       );
     } else if (browsersPath && existsSync(headlessShellPath)) {
-      // Use headless shell if regular chromium not found
+      // Fallback to headless shell only if regular chromium not found
       executablePath = headlessShellPath;
       console.log(
         JSON.stringify({
-          severity: 'INFO',
-          message: 'Using Chromium headless shell',
+          severity: 'WARNING',
+          message: 'Regular Chromium not found, using headless shell',
           path: executablePath,
           timestamp: new Date().toISOString(),
         })
       );
     } else {
-      console.log(
+      // Neither browser found - this will likely fail
+      console.error(
         JSON.stringify({
-          severity: 'INFO',
-          message: 'Using default Playwright browser detection',
-          browsersPath: browsersPath || 'not set',
+          severity: 'ERROR',
+          message: 'No browser executable found',
+          browsersPath,
+          checkedPaths: { chromiumPath, headlessShellPath },
           timestamp: new Date().toISOString(),
         })
       );
+      throw new Error(`No browser executable found. Checked: ${chromiumPath}, ${headlessShellPath}`);
     }
 
     // Launch a new browser instance for each request (more reliable)
+    // ALWAYS set executablePath to force use of regular chromium (not headless shell)
     const launchOptions = {
       headless: true,
+      executablePath: executablePath, // Always set this to avoid Playwright defaulting to headless shell
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -418,11 +437,6 @@ export async function generateReceiptPDF(receiptData) {
       ],
       timeout: 30000,
     };
-
-    // Set executable path if we found one
-    if (executablePath) {
-      launchOptions.executablePath = executablePath;
-    }
 
     browser = await chromium.launch(launchOptions);
 
