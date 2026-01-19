@@ -29,7 +29,7 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont \
     font-noto-emoji \
-    wqy-zhenhei \
+    font-noto-cjk \
     && rm -rf /var/cache/apk/*
 
 # Security: Run as non-root user
