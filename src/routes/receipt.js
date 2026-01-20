@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { generateReceiptPDF } from '../services/pdfGenerator.js';
+import { generateScreeningReportPDF } from '../services/screeningReportGenerator.js';
+import { generateSTRPDF } from '../services/strGenerator.js';
 
 const router = Router();
 
@@ -239,6 +241,179 @@ router.post('/generate-receipt-pdf', async (req, res, next) => {
     );
 
     // Pass error to error handler middleware
+    error.code = error.code || 'PDF_GENERATION_ERROR';
+    next(error);
+  }
+});
+
+/**
+ * POST /api/generate-screening-report-pdf
+ * Generate screening report PDF from structured data
+ * Body: {
+ *   name?: string,
+ *   riskScore?: number | string,
+ *   status?: string,
+ *   country?: string,
+ *   sector?: string,
+ *   reason?: string,
+ *   totalMatches?: number,
+ *   executionTime?: number,
+ *   transactionCount?: number,
+ *   suspiciousCount?: number,
+ *   matches?: Array<{ name?: string, score?: number | string, listSource?: string, dob?: unknown, nationality?: unknown, description?: string }>,
+ *   transactions?: Array<{ date?: string, type?: string, amount?: number | string, currency?: string, to?: string, from?: string }>,
+ *   suspiciousTransactions?: Array<{ transaction: { date?: string, type?: string, amount?: number | string, currency?: string, to?: string, from?: string }, reason: string, riskPoints: number }>
+ * }
+ */
+router.post('/generate-screening-report-pdf', async (req, res, next) => {
+  const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+
+  try {
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'Screening report PDF generation request received',
+        requestId,
+        timestamp: new Date().toISOString(),
+      })
+    );
+
+    const reportData = req.body;
+
+    if (!reportData || typeof reportData !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body',
+        code: 'INVALID_BODY',
+      });
+    }
+
+    const pdfBuffer = await generateScreeningReportPDF(reportData);
+
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('Generated PDF is empty');
+    }
+
+    if (req.aborted || res.headersSent) {
+      return;
+    }
+
+    const filenameSafe = (reportData.name || 'unknown').replace(/\s+/g, '-');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="screening-report-${filenameSafe}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    res.status(200).send(pdfBuffer);
+
+    const duration = Date.now() - startTime;
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'Screening report PDF generation completed',
+        requestId,
+        duration: `${duration}ms`,
+        pdfSize: pdfBuffer.length,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(
+      JSON.stringify({
+        severity: 'ERROR',
+        message: 'Screening report PDF generation failed',
+        requestId,
+        error: error.message,
+        stack: error.stack,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      })
+    );
+
+    error.code = error.code || 'PDF_GENERATION_ERROR';
+    next(error);
+  }
+});
+
+/**
+ * POST /api/generate-str-pdf
+ * Generate STR (Suspicious Transaction Report) PDF from structured data
+ * Body: {
+ *   profile?: { name?: string, id?: string, country?: string, sector?: string, riskScore?: number | string, reason?: string },
+ *   transactions?: Array<{ date?: string, type?: string, amount?: number | string, currency?: string, to?: string, from?: string }>,
+ *   status?: string,
+ *   notes?: string[]
+ * }
+ */
+router.post('/generate-str-pdf', async (req, res, next) => {
+  const requestId = `req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+
+  try {
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'STR PDF generation request received',
+        requestId,
+        timestamp: new Date().toISOString(),
+      })
+    );
+
+    const strData = req.body;
+
+    if (!strData || typeof strData !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body',
+        code: 'INVALID_BODY',
+      });
+    }
+
+    const pdfBuffer = await generateSTRPDF(strData);
+
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('Generated PDF is empty');
+    }
+
+    if (req.aborted || res.headersSent) {
+      return;
+    }
+
+    const filenameSafe = ((strData.profile?.name || 'report').replace(/\s+/g, '_'));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filenameSafe}_STR.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    res.status(200).send(pdfBuffer);
+
+    const duration = Date.now() - startTime;
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'STR PDF generation completed',
+        requestId,
+        duration: `${duration}ms`,
+        pdfSize: pdfBuffer.length,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(
+      JSON.stringify({
+        severity: 'ERROR',
+        message: 'STR PDF generation failed',
+        requestId,
+        error: error.message,
+        stack: error.stack,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      })
+    );
+
     error.code = error.code || 'PDF_GENERATION_ERROR';
     next(error);
   }

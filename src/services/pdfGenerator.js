@@ -35,6 +35,16 @@ export async function generateReceiptPDF(receiptData) {
     notes,
     receiptImageUrl,
     uploader = {},
+    receiptId,
+    caseReference,
+    riskContext,
+    riskClassification,
+    riskScore,
+    triggerReason,
+    sourceSystem,
+    documentId,
+    referenceId,
+    uploadTimestamp,
   } = receiptData;
 
   // Log extracted values
@@ -134,24 +144,38 @@ export async function generateReceiptPDF(receiptData) {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: #1a1a1a;
       background: #ffffff;
-      padding: 40px 50px;
+      padding: 0;
+      margin: 0;
     }
     
     .container {
-      max-width: 700px;
+      max-width: 100%;
       margin: 0 auto;
-      min-height: calc(100vh - 80px);
+      padding: 40px 50px;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
+      box-sizing: border-box;
+    }
+    
+    .content-wrapper {
+      flex: 1;
+      padding-bottom: 40px;
     }
     
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 24px;
+      margin-bottom: 30px;
       padding-bottom: 20px;
       border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
     
     .logo-img {
@@ -160,48 +184,80 @@ export async function generateReceiptPDF(receiptData) {
       object-fit: contain;
     }
     
-    .receipt-title {
+    .header-right {
+      text-align: right;
+    }
+    
+    .document-title {
       font-size: 15px;
       font-weight: 600;
       color: #1a1a1a;
       margin-bottom: 4px;
+      text-transform: uppercase;
     }
     
-    .generation-time {
+    .document-id {
       font-size: 13px;
       color: #6b7280;
     }
     
-    .separator {
-      height: 1px;
-      background: #e5e7eb;
-      margin-bottom: 24px;
+    .section {
+      margin-bottom: 20px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 20px;
     }
     
-    .row {
-      display: flex;
-      justify-content: space-between;
-      padding-bottom: 20px;
-      margin-bottom: 20px;
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
       border-bottom: 1px solid #e5e7eb;
     }
     
-    .row:last-child {
+    .transaction-table {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .transaction-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .transaction-row:last-child {
       border-bottom: none;
-      margin-bottom: 0;
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px 30px;
+    }
+    
+    .info-item {
+      margin-bottom: 16px;
     }
     
     .label {
       font-size: 14px;
       color: #6b7280;
       font-weight: 500;
+      margin-bottom: 4px;
     }
     
     .value {
       font-size: 14px;
       color: #1a1a1a;
       font-weight: 500;
-      text-align: right;
     }
     
     .amount {
@@ -218,126 +274,262 @@ export async function generateReceiptPDF(receiptData) {
       font-size: 14px;
     }
     
+    .compliance-box {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 16px;
+      background: #ffffff;
+    }
+    
+    .risk-score-display {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-top: 4px;
+    }
+    
+    .trigger-reasons {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+    
+    .trigger-reason-item {
+      font-size: 13px;
+      color: #1a1a1a;
+      margin-bottom: 6px;
+      padding-left: 16px;
+      position: relative;
+    }
+    
+    .trigger-reason-item::before {
+      content: '•';
+      position: absolute;
+      left: 0;
+      color: #6b7280;
+    }
+    
+    .text-content {
+      font-size: 14px;
+      color: #1a1a1a;
+      line-height: 1.6;
+      max-width: 100%;
+      word-wrap: break-word;
+    }
+    
     .footer {
-      margin-top: auto;
-      padding-top: 24px;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      padding: 20px 50px;
       border-top: 1px solid #e5e7eb;
       text-align: center;
-      font-size: 13px;
+      font-size: 12px;
       color: #6b7280;
+      line-height: 1.6;
+      background: #ffffff;
+      box-sizing: border-box;
+    }
+    
+    body {
+      position: relative;
+      padding-bottom: 80px;
+    }
+    
+    .section {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    
+    .transaction-table {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .generation-time {
+      font-size: 12px
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="content-wrapper">
     <!-- Header -->
     <div class="header">
-      ${logoBase64 ? `
-      <img src="${logoBase64}" alt="AML KW Logo" class="logo-img" />
-      ` : ''}
-      <div>
-        <div class="receipt-title">Receipt</div>
-        <div class="generation-time">Generated: ${generationTimestamp}</div>
+      <div class="header-left">
+        ${logoBase64 ? `<img src="${logoBase64}" alt="AML KW Logo" class="logo-img" />` : ''}
+      </div>
+      <div class="header-right">
+        <div class="document-title">Receipt Record</div>
+        ${documentId ? `<div class="document-id">${escapeHtml(documentId)}</div>` : ''}
+        <div class="generation-time">Generated on: ${generationTimestamp}</div>
       </div>
     </div>
     
-    <!-- Separator -->
-    <div class="separator"></div>
+    <!-- Transaction Details -->
+    <div class="transaction-table">
+      <div class="section-title">Transaction Details</div>
+      ${customerName ? `
+      <div class="transaction-row">
+        <span class="label">Customer Name</span>
+        <span class="value">${escapeHtml(String(customerName))}</span>
+      </div>
+      ` : ''}
+      ${amount != null ? `
+      <div class="transaction-row">
+        <span class="label">Transaction Amount</span>
+        <span class="value amount">${formatAmount(Number(amount), currency)}</span>
+      </div>
+      ` : ''}
+      ${date ? `
+      <div class="transaction-row">
+        <span class="label">Location</span>
+        <span class="value">${formatDate(String(date))}</span>
+      </div>
+      ` : ''}
+      ${location ? `
+      <div class="transaction-row">
+        <span class="label">Category</span>
+        <span class="value">${escapeHtml(String(location))}</span>
+      </div>
+      ` : ''}
+      ${category ? `
+      <div class="transaction-row">
+        <span class="label">Category</span>
+        <span class="value"><span class="badge">${escapeHtml(String(category))}</span></span>
+      </div>
+      ` : ''}
+      ${paymentMethod ? `
+      <div class="transaction-row">
+        <span class="label">Payment Method</span>
+        <span class="value"><span class="badge">${escapeHtml(String(paymentMethod))}</span></span>
+      </div>
+      ` : ''}
+      ${taxAmount != null ? `
+      <div class="transaction-row">
+        <span class="label">Tax Amount</span>
+        <span class="value">${formatAmount(taxAmount, currency)}</span>
+      </div>
+      ` : ''}
+      ${caseReference ? `
+      <div class="transaction-row">
+        <span class="label">Case Reference</span>
+        <span class="value">${escapeHtml(caseReference)}</span>
+      </div>
+      ` : ''}
+      ${sourceSystem ? `
+      <div class="transaction-row">
+        <span class="label">Source System</span>
+        <span class="value">${escapeHtml(sourceSystem)}</span>
+      </div>
+      ` : ''}
+      ${riskContext ? `
+      <div class="transaction-row">
+        <span class="label">Risk Context</span>
+        <span class="value">${escapeHtml(riskContext)}</span>
+      </div>
+      ` : ''}
+      ${receiptImageUrl ? `
+      <div class="transaction-row">
+        <span class="label">Receipt Image URL</span>
+        <span class="value"><a href="${escapeHtml(receiptImageUrl)}" style="color: #2563eb; text-decoration: underline; word-break: break-all;">${escapeHtml(receiptImageUrl)}</a></span>
+      </div>
+      ` : ''}
+    </div>
     
-    <!-- Receipt Info -->
-    ${customerName ? `
-    <div class="row">
-      <span class="label">Customer Name</span>
-      <span class="value">${escapeHtml(String(customerName))}</span>
+    <!-- Compliance Context -->
+    ${riskClassification || riskScore !== undefined ? `
+    <div class="section">
+      <div class="section-title">Compliance Context</div>
+      <div class="compliance-box">
+        ${riskClassification ? `
+        <div class="info-item">
+          <div class="label">Risk Classification</div>
+          <div class="value"><span class="badge">${escapeHtml(String(riskClassification).toUpperCase())}</span></div>
+        </div>
+        ` : ''}
+        ${riskScore !== undefined ? `
+        <div class="info-item">
+          <div class="label">Risk Score</div>
+          <div class="risk-score-display">${typeof riskScore === 'number' ? riskScore : parseFloat(riskScore) || 0} / 100</div>
+        </div>
+        ` : ''}
+        ${triggerReason ? `
+        <div class="trigger-reasons">
+          <div class="label">Trigger Reason:</div>
+          ${Array.isArray(triggerReason) ? triggerReason.map(reason => `
+            <div class="trigger-reason-item">${escapeHtml(String(reason))}</div>
+          `).join('') : `
+            <div class="trigger-reason-item">${escapeHtml(String(triggerReason))}</div>
+          `}
+        </div>
+        ` : ''}
+      </div>
     </div>
     ` : ''}
     
-    ${amount != null ? `
-    <div class="row">
-      <span class="label">Amount</span>
-      <span class="value amount">${formatAmount(Number(amount), currency)}</span>
+    <!-- Description and Notes -->
+    ${(description || notes) ? `
+    <div class="section">
+      <div class="section-title">Description and Notes</div>
+      ${description ? `
+      <div class="text-content" style="margin-bottom: ${notes ? '16px' : '0'};">
+        <strong>Description:</strong><br>
+        ${escapeHtml(description)}
+      </div>
+      ` : ''}
+      ${notes ? `
+      <div class="text-content">
+        <strong>Internal Notes:</strong><br>
+        ${escapeHtml(notes)}
+      </div>
+      ` : ''}
     </div>
     ` : ''}
     
-    ${date ? `
-    <div class="row">
-      <span class="label">Date</span>
-      <span class="value">${formatDate(String(date))}</span>
+    <!-- Attached Documents -->
+    ${referenceId ? `
+    <div class="section">
+      <div class="section-title">Attached Documents</div>
+      <div class="info-grid">
+        ${referenceId ? `
+        <div class="info-item">
+          <div class="label">Reference ID</div>
+          <div class="value">${escapeHtml(referenceId)}</div>
+        </div>
+        ` : ''}
+      </div>
     </div>
     ` : ''}
     
-    ${location ? `
-    <div class="row">
-      <span class="label">Location</span>
-      <span class="value">${escapeHtml(String(location))}</span>
+    <!-- Source Information -->
+    ${uploader.name || uploader.email || uploadTimestamp ? `
+    <div class="section">
+      <div class="section-title">Source Information</div>
+      <div class="info-grid">
+        ${uploader.name ? `
+        <div class="info-item">
+          <div class="label">Uploader By</div>
+          <div class="value">${escapeHtml(uploader.name)}</div>
+        </div>
+        ` : ''}
+        ${uploader.email ? `
+        <div class="info-item">
+          <div class="label">Uploader Email</div>
+          <div class="value">${escapeHtml(uploader.email)}</div>
+        </div>
+        ` : ''}
+        ${uploadTimestamp ? `
+        <div class="info-item">
+          <div class="label">Upload Timestamp</div>
+          <div class="value">${escapeHtml(String(uploadTimestamp))}</div>
+        </div>
+        ` : ''}
+      </div>
     </div>
     ` : ''}
-    
-    ${category ? `
-    <div class="row">
-      <span class="label">Category</span>
-      <span class="value"><span class="badge">${escapeHtml(String(category))}</span></span>
-    </div>
-    ` : ''}
-    
-    ${paymentMethod ? `
-    <div class="row">
-      <span class="label">Payment Method</span>
-      <span class="value"><span class="badge">${escapeHtml(String(paymentMethod))}</span></span>
-    </div>
-    ` : ''}
-    
-    ${description ? `
-    <div class="row">
-      <span class="label">Description</span>
-      <span class="value">${escapeHtml(description)}</span>
-    </div>
-    ` : ''}
-    
-    ${taxAmount != null ? `
-    <div class="row">
-      <span class="label">Tax Amount</span>
-      <span class="value">${formatAmount(taxAmount, currency)}</span>
-    </div>
-    ` : ''}
-    
-    ${notes ? `
-    <div class="row">
-      <span class="label">Notes</span>
-      <span class="value">${escapeHtml(notes)}</span>
-    </div>
-    ` : ''}
-    
-    ${receiptImageUrl ? `
-    <div class="row">
-      <span class="label">Receipt Image</span>
-      <span class="value"><a href="${escapeHtml(receiptImageUrl)}" style="color: #2563eb; text-decoration: underline;">View</a></span>
-    </div>
-    ` : ''}
-    
-    ${uploader.name ? `
-    <div class="row">
-      <span class="label">Uploader Name</span>
-      <span class="value">${escapeHtml(uploader.name)}</span>
-    </div>
-    ` : ''}
-    
-    ${uploader.email ? `
-    <div class="row">
-      <span class="label">Uploader Email</span>
-      <span class="value">${escapeHtml(uploader.email)}</span>
-    </div>
-    ` : ''}
-    
-    ${!customerName && amount == null && !date && !location && !category && !paymentMethod && !description && taxAmount == null && !notes && !receiptImageUrl && !uploader.name && !uploader.email ? `
-    <div class="row">
-      <span class="label" style="color: #999; font-style: italic;">No receipt details provided</span>
-    </div>
-    ` : ''}
-    
-    <!-- Footer -->
-    <div class="footer">
-      Generated by AML KW
     </div>
   </div>
 </body>
@@ -409,14 +601,17 @@ export async function generateReceiptPDF(receiptData) {
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
-      printBackground: false,
+      printBackground: true,
       margin: {
-        top: '20px',
-        right: '20px',
-        bottom: '20px',
-        left: '20px',
+        top: '40px',
+        right: '50px',
+        bottom: '80px',
+        left: '50px',
       },
-      preferCSSPageSize: true,
+      preferCSSPageSize: false,
+      displayHeaderFooter: true,
+      headerTemplate: '<div></div>',
+      footerTemplate: '<div style="width: 100%; text-align: center; font-size: 12px; color: #6b7280; padding: 10px 0;">Generated By : AML KW</div>',
       timeout: 30000,
     });
 
